@@ -1,8 +1,9 @@
+#!env python3
 import numpy as np
 import numpy.random
 
 from functools import reduce
-import itertools as ito
+# import itertools as ito
 
 rng = numpy.random.default_rng()
 
@@ -256,5 +257,5 @@ def printb(board):
         print()
 
 
-moves = [[1, 1], [0, 0], [1, 2], [1, 0], [2, 1], [0, 1], [2, 2], [0, 2],
-         [0, 3], [2, 0], [0, 0], [0, 0], [3, 0]]
+if __name__ == "__main__":
+    game(manual_move, cpu_move, viz=printb)
