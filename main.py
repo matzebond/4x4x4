@@ -58,12 +58,11 @@ def game(p1_move_func,
     # raise Exception(f"max {turn=}reached")
 
 
-def manual_move(board=None, player=None):
-    tries = 3
+def manual_move(board=None, player=None, tries=3):
     while tries > 0:
         try:
             i = input().split(',')
-            move = list(map(int, i))
+            move = np.array(list(map(int, i)))
             if move in legal_moves(board):
                 return move
             else:
@@ -84,21 +83,27 @@ def legal_moves(board):
     return moves
 
 
+def iterate_legal_positions(board, turn_p1=True):
+    for move in legal_moves(board):
+        make_move(board, turn_p1, move)
+        yield board
+        revert_move(board, move)
+
+
 def random_legal_move(board, player=None):
     moves = legal_moves(board)
     assert moves.size >= 0
     return rng.choice(moves)
 
 
-def cpu_move(board, player=None):
-    _, move = evaluate(board, player == 1, max_depth=1)
+def cpu_move(board, player=None, algo=minmax, depth=2):
+    _, move = algo(board, depth=depth, turn_p1=player == 1)
     return move if move is not None else rng.choice(legal_moves(board))
 
 
-def dont_loose_in_one(boad, player):
-    score, score_move = evaluate(board, player == 1)
-    for move in legal_moves(boad):
-        pass
+def cpu_move_rand(board, player=None, algo=alphabeta, depth=2):
+    _, moves = algo(board, depth=depth, turn_p1=player == 1)
+    return rng.choice(moves if len(moves) > 0 else legal_moves(board))
 
 
 def make_move(board, player, move):
@@ -184,56 +189,91 @@ def eval_stick(stick):
     return player, free
 
 
-def eval_single(board, turn_p1) -> float:
+def heuristic(board, turn_p1=True) -> float:
     threads = np.zeros((2, side_length), np.uint8)
     for stick in sticks(board):
         player, free = eval_stick(stick)
         if player is not None:
             if free == 0:
-                return (player - 1) * 2 - 1
+                return -((player - 1) * 2 - 1)
             threads[player - 1, free] += 1
 
     t1 = max(0.25, float(threads[0][1]))
     t2 = max(0.25, float(threads[1][1]))
+    if turn_p1:
+        t2 *= 0.8
+    else:
+        t1 *= 0.8
     return (t1 - t2) / (t1 + t2)
 
 
 def check_winner(board):
-    val = eval_single(board, True)
-    if val == 1 or val == -1:
-        return ((val + 1) // 2) + 1
+    val = heuristic(board, True)
+    if val == 1:
+        return 1
+    elif val == -1:
+        return 2
     else:
         return 0
 
 
-def evaluate(board, turn_p1, max_depth=1, cur_val=0):
-    # print(f"eval depth{max_depth}")
-    # print(board)
-    val = eval_single(board, turn_p1)
-    # print(val)
+def minmax(board, depth=1, turn_p1=True):
+    val = heuristic(board, turn_p1)
     if val == 1 or val == -1:
         return val, None
-    if max_depth <= 0:
+    if depth <= 0:
         return val, None
 
     best = -1 if turn_p1 else 1
     best_move = None
     for move in legal_moves(board):
         make_move(board, 1 if turn_p1 else 2, move)
-        score, score_move = evaluate(board, not turn_p1, max_depth - 1, best)
-        # print(move, score)
+        score, score_move = minmax(board, depth - 1, not turn_p1)
         if (turn_p1 and score > best) \
            or (not turn_p1 and score < best):
             best = score
             best_move = move
-            best = score
-            # printb(board)
         revert_move(board, move)
 
     return best, best_move
 
 
+def alphabeta(board, depth, turn_p1=True, alpha=-1, beta=1):
+    val = heuristic(board, turn_p1)
+    if val == 1 or val == -1:
+        return val, []
+    if depth <= 0:
+        return val, []
+
+    best_move = []
+    if turn_p1:
+        value = -1
+        for board in iterate_legal_positions(board, not turn_p1):
+            score, score_move = alphabeta(board, depth - 1, not turn_p1, alpha,
+                                          beta)
+            if score >= value:
+                value = score
+                best_move.append(move)
+            if value >= beta:
+                break
+            alpha = max(alpha, value)
+        return value, best_move
+    else:
+        value = +1
+        for board in iterate_legal_positions(board, not turn_p1):
+            score, score_move = alphabeta(board, depth - 1, not turn_p1, alpha,
+                                          beta)
+            if score <= value:
+                value = score
+                best_move.append(move)
+            if value <= alpha:
+                break
+            beta = min(beta, value)
+        return value, best_move
+
+
 def printb(board):
+
     def cell(c):
         if c == 0:
             return "∙"
